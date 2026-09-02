@@ -49,7 +49,7 @@ for f in Path('data/api_cache_elite').glob('*.json'):
                     eshots.append((s['x'], s['y'], s.get('result') == 3))
 
 fig = plt.figure(figsize=(13, 8.5), dpi=130)
-fig.suptitle(f'FIFA 개인 대시보드 — {NICK}  (최근 {len(games)}판)', fontsize=15, fontweight='bold')
+fig.suptitle(f'FIFA 개인 대시보드 — {NICK}  (최근 경기)', fontsize=15, fontweight='bold')
 
 # ==== (1) 슛 히트맵 (피치) ====
 ax1 = fig.add_subplot(2, 2, 1)
@@ -92,7 +92,7 @@ for lo, hi, lab in bands:
 cols = ['#c62828' if y < 45 else ('#2e7d32' if y > 55 else '#f9a825') for y in ys]
 b = ax3.bar(xs, ys, color=cols)
 for rect, y, n in zip(b, ys, ns):
-    ax3.text(rect.get_x()+rect.get_width()/2, y+1, f'{y:.0f}%\n({n}판)', ha='center', fontsize=8)
+    ax3.text(rect.get_x()+rect.get_width()/2, y+1, f'{y:.0f}%', ha='center', fontsize=9)
 ax3.axhline(50, color='#888', ls=':', lw=1)
 ax3.set_ylabel('승률 %'); ax3.set_ylim(0, 90); ax3.set_title('③ 시간대별 승률 (KST)', fontsize=11)
 ax3.spines[['top', 'right']].set_visible(False)
