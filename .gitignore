@@ -1,0 +1,51 @@
+# ===== 비밀키 (절대 커밋 금지) =====
+.nexon_key
+*.key
+*.env
+
+# ===== 대용량 미디어 / 데이터 =====
+data/videos/
+data/output/
+data/api_cache/
+data/api_cache_elite/
+data/api_cache_lowtier/
+data/dataset/
+data/yolo/
+data/yolo_v2/
+data/yolo_v2_pilot/
+data/test/
+data/team_colors/
+runs_fifa/
+*.mp4
+*.avi
+*.mov
+
+# ===== 모델 가중치 (표준 pretrained 포함, 용량 큼) =====
+*.pt
+*.pth
+*.onnx
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# ===== 임시/디버그 산출물 =====
+_tail.txt
+*.log
+
+# ===== OS =====
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# ===== 무관한 실험/로그 (FIFA 분석 본체 아님) =====
+dataset/
+*_log.txt
+keyup_test.py
+.vscode/
+reports/

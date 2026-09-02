@@ -1,0 +1,43 @@
+{
+  "player": "09이건호",
+  "my_division": "월드클래스1부(2000)",
+  "formation": "4222",
+  "test": "포를란 vs 수아레스 좌우 배치",
+  "arrangements": {
+    "A": "수아레스 좌 + 포를란 우",
+    "B": "수아레스 우 + 포를란 좌"
+  },
+  "div_map": {"월클1":2000, "월클2":2100, "월클3":2200, "프로1":2300, "프로2":2400},
+  "games": [
+    {
+      "n": 1, "arr": "A", "opp_div": 2200, "opp_tier": "월클3부(나보다 2부 아래)",
+      "result": "승", "score": "3:1",
+      "SUA": {"pos": "좌", "rating": 8.6, "goal": 1, "assist": 2, "sot": 1, "drib": "8/9", "poss": "0/5"},
+      "FOR": {"pos": "우", "rating": 8.3, "goal": 1, "assist": 0, "sot": 1, "drib": "10/11", "poss": "1/5"}
+    },
+    {
+      "n": 2, "arr": "B", "opp_div": 2000, "opp_tier": "월클1부(나와 동급)",
+      "result": "승", "score": "1:0",
+      "FOR": {"pos": "좌", "rating": 7.4, "goal": 1, "assist": 0, "sot": "1/2", "drib": "8/9", "poss": "0/3"},
+      "SUA": {"pos": "우", "rating": 6.3, "goal": 0, "assist": 0, "sot": "1/1", "drib": "7/13", "poss": "0/9"}
+    },
+    {
+      "n": 3, "arr": "A", "opp_div": null, "opp_tier": "언랭크(강도 불명, 대체로 약체)",
+      "result": "무", "score": "1:1",
+      "SUA": {"pos": "좌", "rating": 8.0, "goal": 1, "assist": 0, "sot": "2/2", "drib": "9/12", "poss": "2/7"},
+      "FOR": {"pos": "우", "rating": 6.6, "goal": 0, "assist": 0, "sot": "0/0", "drib": "7/7", "poss": "0/2"}
+    },
+    {
+      "n": 4, "arr": "B", "opp_div": "마스터3부", "opp_tier": "마스터3부(월클 바로 위 = 나보다 1단계 상위)",
+      "result": "무", "score": "1:1",
+      "FOR": {"pos": "좌", "rating": 7.9, "goal": 1, "assist": 0, "sot": "1/2", "drib": "5/8", "poss": "0/5"},
+      "SUA": {"pos": "우", "rating": 6.5, "goal": 0, "assist": 0, "sot": "1/1", "drib": "5/6", "poss": "0/2"}
+    },
+    {
+      "n": 5, "arr": "A", "opp_div": 2000, "opp_tier": "월클1부(나와 동급)",
+      "result": "승", "score": "4:2",
+      "SUA": {"pos": "좌", "rating": 9.5, "goal": 2, "assist": 1, "sot": "2/2", "drib": "8/10", "poss": "2/7"},
+      "FOR": {"pos": "우", "rating": 6.8, "goal": 0, "assist": 0, "sot": "0/0", "drib": "4/5", "poss": "1/3"}
+    }
+  ]
+}
