@@ -25,14 +25,16 @@ from src.detect_player import detect_red_dot
 from src.detect_teams import (get_dot_pixels, extract_dot_colors,
                                 estimate_team_colors, is_minimap_valid,
                                 has_field_rect, load_manual_team_colors,
-                                build_team_model, classify_dots_v2)
+                                build_team_model, classify_dots_v2,
+                                resolve_our_team)
 
 
-def init_team_model(video_path: str, n_attempts: int = 12):
+def init_team_model(video_path: str, n_attempts: int = 12, n_vote: int = 150):
     """팀 분리 모델 결정 (v2 — 2단계 분리).
 
     여러 시점 미니맵을 모아 build_team_model 로 합의 모델 도출.
     단일 max-dist 프레임 락인(구버전) 대신 분포 합의를 쓴다.
+    이어서 n_vote 시점의 조작 선수 dot 색으로 어느 쪽이 우리 팀인지 정한다.
     """
     roi = load_roi(video_path=video_path)
     cap = cv2.VideoCapture(video_path)
@@ -47,12 +49,22 @@ def init_team_model(video_path: str, n_attempts: int = 12):
         mini = crop_minimap(frame, roi)
         if is_minimap_valid(mini):
             samples.append(mini)
-    cap.release()
-
     model = build_team_model(samples)
     if model is None:
+        cap.release()
         raise RuntimeError("팀 모델 추정 실패. 미니맵 ROI 또는 영상 확인 필요.")
-    return model
+
+    vote_samples = []
+    for i in range(n_vote):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, int(n_frames * (i + 1) / (n_vote + 1)))
+        ok, frame = cap.read()
+        if not ok:
+            continue
+        mini = crop_minimap(frame, roi)
+        if is_minimap_valid(mini):
+            vote_samples.append(mini)
+    cap.release()
+    return resolve_our_team(vote_samples, model)
 
 
 def init_team_colors(video_path: str, n_attempts: int = 10):
@@ -123,14 +135,14 @@ def extract_frame_state(mini_bgr, team_model, strict: bool = False):
     player = detect_red_dot(mini_bgr)
     t0, t1 = classify_dots_v2(mini_bgr, team_model)
 
-    # 빨강(조작선수) 회수: 빨강 dot은 어느 팀에서 1명이 빨강으로 칠해져
-    # 분류에서 빠진 것 → 그 팀이 1명 적다. 색을 모르니 '더 적은 팀'에 되돌린다.
-    # (자기교정, 색 가정 불필요. 단 이미 잡힌 dot과 겹치면 중복 방지 위해 거리 체크)
+    # 빨강(조작선수) 회수: 빨간 테두리 dot은 덩어리가 커져 분류에서 빠지기 쉽다.
+    # 우리 팀이 확정된 모델이면 조작선수 = 우리(T0). 미확정이면 '더 적은 팀'에 되돌린다.
+    # (이미 잡힌 dot과 겹치면 중복 방지 위해 거리 체크)
     if player is not None:
         def _near(pt, lst, r=4):
             return any(abs(pt[0]-x) <= r and abs(pt[1]-y) <= r for x, y in lst)
         if not _near(player, t0) and not _near(player, t1):
-            if len(t0) <= len(t1):
+            if (team_model or {}).get("our_team_confirmed") or len(t0) <= len(t1):
                 t0.append((int(player[0]), int(player[1])))
             else:
                 t1.append((int(player[0]), int(player[1])))

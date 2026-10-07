@@ -18,7 +18,7 @@ from sklearn.cluster import KMeans
 
 from src.minimap import load_roi, crop_minimap, grab_frame
 from src.detect_ball import YELLOW_LOW, YELLOW_HIGH
-from src.detect_player import RED_LOW1, RED_HIGH1, RED_LOW2, RED_HIGH2
+from src.detect_player import RED_LOW1, RED_HIGH1, RED_LOW2, RED_HIGH2, red_mask, detect_red_dot
 
 
 TEAM_COLORS_DIR = Path("data/team_colors")
@@ -450,27 +450,75 @@ def _hue_diff(a, b):
     return min(d, 180 - d)
 
 
+def _color_side(h, s, v, model):
+    """한 dot 색이 모델의 어느 쪽(0/1)인지. 판정 불가면 None. swap 미적용."""
+    if model["mode"] == "bright_vs_dark":
+        return 0 if v >= model["v_split"] else 1
+    if model["mode"] == "white_vs_color":
+        if s < WHITE_S_MAX and v > WHITE_V_MIN:
+            return 0
+        return 1 if s >= COLOR_S_MIN else None
+    if s < 30:
+        return None
+    return 0 if _hue_diff(h, model["hueA"]) <= _hue_diff(h, model["hueB"]) else 1
+
+
 def classify_dots_v2(mini_bgr, model):
-    """team_model 기준 각 dot을 T0/T1 분류. 반환 (t0_list, t1_list)."""
+    """team_model 기준 각 dot을 T0/T1 분류. 반환 (t0_list, t1_list).
+    T0 = 우리 팀. model["swap"] 이면 색 기준 양쪽을 맞바꿔 반환."""
     colors, centers = extract_dot_core_colors(mini_bgr)
     if len(colors) == 0 or model is None:
         return [], []
     hsv = _bgr_to_hsv_rows(colors)
-    H, S, V = hsv[:, 0], hsv[:, 1], hsv[:, 2]
-    t0, t1 = [], []
-    for i, (cx, cy) in enumerate(centers):
-        if model["mode"] == "bright_vs_dark":
-            (t0 if V[i] >= model["v_split"] else t1).append((cx, cy))
-        elif model["mode"] == "white_vs_color":
-            if S[i] < WHITE_S_MAX and V[i] > WHITE_V_MIN:
-                t0.append((cx, cy))
-            elif S[i] >= COLOR_S_MIN:
-                t1.append((cx, cy))
-        else:
-            if S[i] < 30:
-                continue
-            if _hue_diff(H[i], model["hueA"]) <= _hue_diff(H[i], model["hueB"]):
-                t0.append((cx, cy))
-            else:
-                t1.append((cx, cy))
-    return t0, t1
+    sides = ([], [])
+    for (h, s, v), c in zip(hsv, centers):
+        side = _color_side(h, s, v, model)
+        if side is not None:
+            sides[side].append(c)
+    return (sides[1], sides[0]) if model.get("swap") else sides
+
+
+def controlled_inner_hsv(mini_bgr, r: int = 2):
+    """조작 선수(빨간 테두리) 안쪽 dot 색 HSV. 테두리 없거나 안쪽이 빨강뿐이면 None."""
+    p = detect_red_dot(mini_bgr)
+    if p is None:
+        return None
+    x, y = int(p[0]), int(p[1])
+    h_, w_ = mini_bgr.shape[:2]
+    y0, y1, x0, x1 = max(0, y - r), min(h_, y + r + 1), max(0, x - r), min(w_, x + r + 1)
+    patch = mini_bgr[y0:y1, x0:x1]
+    keep = red_mask(patch) == 0
+    if keep.sum() < 3:
+        return None
+    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV)[keep]
+    return np.median(hsv, axis=0)
+
+
+def resolve_our_team(samples_bgr, model, min_votes: int = 20, min_share: float = 0.6):
+    """조작 선수 dot 색이 어느 쪽인지 다수결 → 우리 팀이 T0가 되도록 model["swap"] 결정.
+
+    기존엔 '색 기준 0쪽(밝은/흰/hueA) = 우리'를 확인 없이 가정했음.
+    유저 경기는 전부 흰 팀이라 드러나지 않았지만, 우리가 어두운 팀이거나
+    two_color(KMeans 군집 순서가 임의)면 T0/T1이 뒤집혀 공격 방향이 반전됨.
+    표본 부족·박빙이면 기존 가정 유지(swap=False) + 경고.
+    """
+    votes = [0, 0]
+    for mini in samples_bgr:
+        c = controlled_inner_hsv(mini)
+        if c is None:
+            continue
+        side = _color_side(*c, model)
+        if side is not None:
+            votes[side] += 1
+    total = sum(votes)
+    model = dict(model, our_team_votes=votes)
+    if total < min_votes or max(votes) / total < min_share:
+        print(f"[우리팀 판정] 조작선수 색 투표 {votes} — 표본 부족/박빙, "
+              f"기존 가정(색 기준 0쪽 = 우리) 유지")
+        model["swap"] = False
+        return model
+    model["swap"] = votes[1] > votes[0]
+    model["our_team_confirmed"] = True
+    print(f"[우리팀 판정] 조작선수 색 투표 {votes} → "
+          f"{'색 기준 1쪽이 우리 (T0/T1 교체)' if model['swap'] else '색 기준 0쪽이 우리'}")
+    return model
