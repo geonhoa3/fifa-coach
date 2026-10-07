@@ -122,6 +122,11 @@ def estimate_direction_series(df: pd.DataFrame, mini_w: int) -> np.ndarray:
         t, s = t_pos, 1
     else:
         t, s = t_neg, -1
+    # 교대를 넣어 얻는 일치 증가가 작으면 교대 없음 (하프타임 전 끝난 짧은 영상).
+    # 실측: 정상 경기 37~98%, 짧은 영상(match08·12·16·20) 0~3%.
+    n_sig = int((~np.isnan(sig)).sum())
+    if (score[t] * s - abs(tot)) < 0.15 * n_sig:
+        t, s = len(df) - 1, (1 if tot >= 0 else -1)
     dirs = np.where(np.arange(len(df)) <= t, s, -s)
     has = ~np.isnan(sig)
     agree = (sig[has] == dirs[has]).mean()
