@@ -81,15 +81,20 @@ def detect_team_directions_paired(df: pd.DataFrame,
     return -1, 1
 
 
-def estimate_direction_series(df: pd.DataFrame, mini_w: int,
-                                window: int = 151) -> np.ndarray:
+def estimate_direction_series(df: pd.DataFrame, mini_w: int) -> np.ndarray:
     """프레임별 T0 공격 방향 시계열 (+1/-1). 골키퍼 신호 기반.
 
     기존 '팀 평균 x' 방식의 결함 두 가지를 해결:
       1. 평균 x 차이는 수 px (노이즈 수준) → 최후방 dot(골키퍼)은
          자기 골대에 붙어 있어 80px+ 차이로 명확
       2. 영상 전체 단일 방향 → 하프타임 진영 교대 무시.
-         rolling median 으로 프레임별 방향 → 교대 자동 반영
+
+    교대는 '하프타임 1회'로 제약: 프레임 신호와 가장 많이 일치하는
+    (전반 부호, 교대 시점) 하나를 고른다. 영상 안에 교대가 없으면
+    교대 시점이 끝에 붙어 단일 방향이 된다.
+    이전엔 rolling median(151행)이라 경기당 3~11회 가짜 교대가 생겼고,
+    골 위치 vs 스코어보드 대조에서 골 123개 중 88개(72%)만 일치했다
+    (match19는 경기 전체 반전). 1회 제약 후 117개(95%) 일치.
 
     반환: len(df) 크기의 +1/-1 배열 (T0 기준. T1 은 항상 반대)
     """
@@ -106,15 +111,25 @@ def estimate_direction_series(df: pd.DataFrame, mini_w: int,
         left = min(x0) + (mini_w - max(x1))
         right = (mini_w - max(x0)) + min(x1)
         sig[k] = 1.0 if left < right else -1.0
-    s = pd.Series(sig).ffill().bfill()
-    if s.isna().all():
+    if np.isnan(sig).all():
         return np.ones(len(df), dtype=int)
-    d = s.rolling(window, center=True, min_periods=1).median()
-    dirs = np.where(d >= 0, 1, -1)
-    flips = int((np.diff(dirs) != 0).sum())
-    ratio = (dirs == 1).mean()
-    print(f"[방향 시계열] T0 +1 비율 {ratio*100:.0f}%, 방향 전환 {flips}회 "
-          f"({'하프타임 교대 감지' if flips >= 1 else '교대 없음'})")
+    # t 까지 부호 s, 이후 -s 일 때 일치 점수 = s*(앞 합) - s*(뒤 합)
+    c = np.cumsum(np.nan_to_num(sig))
+    tot = c[-1]
+    score = c - (tot - c)                     # s=+1 기준; s=-1 은 부호 반대
+    t_pos, t_neg = int(np.argmax(score)), int(np.argmin(score))
+    if score[t_pos] >= -score[t_neg]:
+        t, s = t_pos, 1
+    else:
+        t, s = t_neg, -1
+    dirs = np.where(np.arange(len(df)) <= t, s, -s)
+    has = ~np.isnan(sig)
+    agree = (sig[has] == dirs[has]).mean()
+    swap = t < len(df) - 1
+    print(f"[방향 시계열] 전반 T0 {s:+d}, "
+          + (f"교대 {df['time_sec'].iloc[t] / 60:.1f}분" if swap and "time_sec" in df
+             else "교대 없음")
+          + f", 프레임 신호 일치 {agree * 100:.0f}%")
     return dirs
 
 
