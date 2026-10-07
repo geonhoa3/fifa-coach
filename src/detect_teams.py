@@ -313,9 +313,14 @@ DARK_S_MAX = 70       # 어두운 유니폼: 채도 낮고
 DARK_V_MAX = 110      #               명도도 낮음 (검정/진회색 팀)
 
 
-def extract_dot_core_colors(mini_bgr, min_area: int = 2, max_area: int = 60):
+def extract_dot_core_colors(mini_bgr, min_area: int = 2, max_area: int = None):
     """각 dot의 '채도 높은 코어' 픽셀 평균 BGR + 중심.
     잔디/노랑(공)/진짜검정외곽선만 픽셀단위 차단 (어두운 유니폼은 보존)."""
+    if max_area is None:
+        # 고정 60은 720p 중계(296x172 ROI, 흰 dot 중앙값 ~19px) 기준.
+        # 1440p 녹화(368x204 ROI)에선 흰 dot이 60~130px라 대부분 잘려
+        # T0가 프레임당 ~4개만 잡혔음 → ROI 면적 비례, 하한 60 유지.
+        max_area = max(60, round(0.0018 * mini_bgr.shape[0] * mini_bgr.shape[1]))
     hsv = cv2.cvtColor(mini_bgr, cv2.COLOR_BGR2HSV)
     grass = cv2.inRange(hsv, GRASS_LOW, GRASS_HIGH)
     yellow = cv2.inRange(hsv, YELLOW_LOW, YELLOW_HIGH)
