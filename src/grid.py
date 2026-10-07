@@ -81,6 +81,34 @@ def detect_team_directions_paired(df: pd.DataFrame,
     return -1, 1
 
 
+def _snap_to_halftime_gap(df: pd.DataFrame, t: int, before_sec: float = 10,
+                          after_sec: float = 30, min_gap_sec: float = 10) -> int:
+    """교대 시점 직후에 시작하는 미니맵 공백(리플레이·하프타임 화면)의 끝으로 옮긴다.
+
+    전반 추가시간 골 직전엔 양 팀이 한쪽 골문에 몰려 골키퍼 신호가 몇 초
+    뒤집히고, 곧바로 하프타임 공백이 와서 변화점이 골 '앞'에 잡혔다
+    (match29 45+4:48 실점이 후반 골로 판정). 공백 시작이 t 의
+    [-before_sec, +after_sec] 안인 첫 공백만 본다 — 범위를 넓히면 경기 중
+    골 리플레이 공백에 잘못 붙는다. 해당 공백이 없으면 t 유지.
+    """
+    ts = df["time_sec"].to_numpy()
+    invalid = ~df["minimap_valid"].fillna(False).astype(bool).to_numpy()
+    k, n = 0, len(df)
+    while k < n:
+        if not invalid[k]:
+            k += 1
+            continue
+        j = k
+        while j + 1 < n and invalid[j + 1]:
+            j += 1
+        if ts[k] > ts[t] + after_sec:
+            break
+        if ts[k] >= ts[t] - before_sec and ts[j] - ts[k] >= min_gap_sec:
+            return j
+        k = j + 1
+    return t
+
+
 def estimate_direction_series(df: pd.DataFrame, mini_w: int) -> np.ndarray:
     """프레임별 T0 공격 방향 시계열 (+1/-1). 골키퍼 신호 기반.
 
@@ -117,7 +145,12 @@ def estimate_direction_series(df: pd.DataFrame, mini_w: int) -> np.ndarray:
     c = np.cumsum(np.nan_to_num(sig))
     tot = c[-1]
     score = c - (tot - c)                     # s=+1 기준; s=-1 은 부호 반대
-    t_pos, t_neg = int(np.argmax(score)), int(np.argmin(score))
+    # 동점 구간(신호 없는 프레임: 골 리플레이~하프타임 휴식)에서는 마지막 지점을
+    # 교대로 잡는다. 첫 지점을 잡으면 전반 막판 골이 후반으로 넘어가 득점 팀이
+    # 반대로 판정됨 (match06·17·25·29 의 후반 '첫 골' 불일치가 전부 이 경우).
+    last = len(score) - 1
+    t_pos = last - int(np.argmax(score[::-1]))
+    t_neg = last - int(np.argmin(score[::-1]))
     if score[t_pos] >= -score[t_neg]:
         t, s = t_pos, 1
     else:
@@ -127,6 +160,8 @@ def estimate_direction_series(df: pd.DataFrame, mini_w: int) -> np.ndarray:
     n_sig = int((~np.isnan(sig)).sum())
     if (score[t] * s - abs(tot)) < 0.15 * n_sig:
         t, s = len(df) - 1, (1 if tot >= 0 else -1)
+    elif "minimap_valid" in df and "time_sec" in df:
+        t = _snap_to_halftime_gap(df, t)
     dirs = np.where(np.arange(len(df)) <= t, s, -s)
     has = ~np.isnan(sig)
     agree = (sig[has] == dirs[has]).mean()
