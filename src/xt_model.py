@@ -107,14 +107,26 @@ def compute_xt(window_seconds: int = 10, sample_every: int = 3,
     return V, starts, reached, (grid_w, grid_h)
 
 
-def visualize_heatmap(V, save_path: str, scale: int = 50, show: bool = True):
-    """히트맵: 가로 i (0=우리골대, max=상대골대), 세로 j."""
+def visualize_heatmap(V, save_path: str, scale: int = 50, show: bool = True,
+                      goal_zone_i: int = 12):
+    """히트맵: 가로 i (0=우리골대, max=상대골대), 세로 j.
+
+    i >= goal_zone_i 는 '골대 영역'(도착 목표, 출발 표본 0)이라 값이 없다.
+    스무딩이 11열 값을 12~14열로 번지게 해 0.6대 가짜 값이 찍히고 15열만
+    0.00 으로 남던 문제 → 회색으로 칠하고 숫자를 표시하지 않는다.
+    """
     grid_w, grid_h = V.shape
     img = np.zeros((grid_h * scale, grid_w * scale, 3), dtype=np.uint8)
 
-    vmax = V.max() if V.max() > 0 else 1
+    play = V[:goal_zone_i]
+    vmax = play.max() if play.max() > 0 else 1
 
-    for i in range(grid_w):
+    gx0 = goal_zone_i * scale
+    img[:, gx0:] = (150, 150, 150)
+    cv2.putText(img, "Goal zone", (gx0 + 8, grid_h * scale // 2),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
+
+    for i in range(min(goal_zone_i, grid_w)):
         for j in range(grid_h):
             v_norm = V[i, j] / vmax  # 0~1
             r = int(v_norm * 255)
